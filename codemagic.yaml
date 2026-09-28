@@ -1,0 +1,46 @@
+# Keep this file at the ROOT of the footscan repository, beside SOULScan/.
+# Manual builds only. No Apple credentials, signing or paid publishing needed.
+workflows:
+  soul-unsigned-ios:
+    name: SOUL - unsigned iPhone build
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      xcode: latest
+    scripts:
+      - name: Check the project and test the scan engine
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/SOULScan"
+          test -f SOULScan.xcodeproj/project.pbxproj
+          sh Tools/test-core.sh
+
+      - name: Build SOUL for a real iPhone without signing
+        script: |
+          set -euo pipefail
+          xcodebuild \
+            -project "$CM_BUILD_DIR/SOULScan/SOULScan.xcodeproj" \
+            -scheme SOULScan \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$CM_BUILD_DIR/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee "$CM_BUILD_DIR/build.log"
+
+      - name: Package the IPA for Sideloadly
+        script: |
+          set -euo pipefail
+          APP="$CM_BUILD_DIR/build/Build/Products/Release-iphoneos/SOULScan.app"
+          test -d "$APP"
+          mkdir -p "$CM_BUILD_DIR/artifacts/Payload"
+          cp -R "$APP" "$CM_BUILD_DIR/artifacts/Payload/"
+          cd "$CM_BUILD_DIR/artifacts"
+          /usr/bin/zip -qry SOULScan-unsigned.ipa Payload
+          /usr/bin/unzip -t SOULScan-unsigned.ipa
+
+    artifacts:
+      - artifacts/SOULScan-unsigned.ipa
+      - build.log
